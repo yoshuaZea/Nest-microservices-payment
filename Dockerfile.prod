@@ -1,0 +1,40 @@
+# DEPENDENCIES
+FROM node:21-alpine3.19 AS deps
+WORKDIR /usr/src/app
+COPY package.json ./
+COPY package-lock.json ./
+RUN npm install
+
+# BUILDER - Build app
+FROM node:21-alpine3.19 AS builder
+WORKDIR /usr/src/app
+
+# Copy all modules from deps 
+COPY --from=deps /usr/src/app/node_modules ./node_modules
+
+# Copy all source code
+COPY . .
+
+# RUN npm run test
+RUN npm run build
+
+# Clean up
+RUN npm ci -f --only=production && npm cache clean --force
+
+# CREATE FINALE IMAGE
+FROM node:21-alpine3.19 AS prod
+WORKDIR /usr/src/app
+
+COPY --from=builder /usr/src/app/node_modules ./node_modules
+
+# Copy /dist
+COPY --from=builder /usr/src/app/dist ./dist
+
+ENV NODE_ENV=production
+
+# Create user and set it up
+USER node
+
+EXPOSE 3003
+
+CMD ["node", "dist/main.js"]
